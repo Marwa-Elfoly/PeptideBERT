@@ -23,6 +23,7 @@ def train_model():
         val_loss, val_acc = validate(model, val_data_loader, criterion, device)
         print(f'Epoch {epoch+1}/{config["epochs"]} - Validation Loss: {val_loss}\tValidation Accuracy: {val_acc}\n')
         scheduler.step(val_acc)
+
         if not config['debug']:
             wandb.log({
                 'train_loss': train_loss, 
@@ -43,10 +44,17 @@ def train_model():
                 'acc': val_acc, 
                 'lr': curr_lr
             }, f'{save_dir}/model.pt')
-            print('Model Saved\n')
+            print('✅ Model checkpoint saved in:', save_dir)
+
+    # === ✅ FINAL SAVE TO GOOGLE DRIVE ===
+    final_drive_path = "/content/drive/MyDrive/best_model_sol.pt"
+    torch.save(model.state_dict(), final_drive_path)
+    print(f"✅ Final model weights saved to Drive: {final_drive_path}")
+
     wandb.finish()
 
 
+# === CONFIG LOADING AND SETUP ===
 config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
 config['device'] = device
 
@@ -56,18 +64,20 @@ config['sch']['steps'] = len(train_data_loader)
 model = create_model(config)
 criterion, optimizer, scheduler = cri_opt_sch(config, model)
 
+# === LOGGING AND SAVE DIR SETUP ===
 if not config['debug']:
     run_name = f'{config["task"]}-{datetime.now().strftime("%m%d_%H%M")}'
     wandb.init(project='PeptideBERT', name=run_name)
 
     save_dir = f'./checkpoints/{run_name}'
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    os.makedirs(save_dir, exist_ok=True)
     shutil.copy('./config.yaml', f'{save_dir}/config.yaml')
     shutil.copy('./model/network.py', f'{save_dir}/network.py')
 
 train_model()
+
+# === OPTIONAL TESTING ===
 if not config['debug']:
     model.load_state_dict(torch.load(f'{save_dir}/model.pt')['model_state_dict'], strict=False)
 test_acc = test(model, test_data_loader, device)
-print(f'Test Accuracy: {test_acc}%')
+print(f'Test Accuracy: {test_acc * 100:.2f}%')
